@@ -69,6 +69,8 @@ map_names_to_towns = {
   "Düren (Kreis)": "kreis"
 }
 
+# The data structure follows the convention used by https://covid.ourworldindata.org
+# ---
 # Population data based on reference date 2020-06-30
 # https://www.it.nrw/statistik/eckdaten/bevoelkerung-nach-gemeinden-93051
 data = {
