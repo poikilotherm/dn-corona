@@ -29,8 +29,9 @@ def parseHTMLTable(doc, date):
 
             # Insert into dict of total cases
             data[town]["data"].append({"date": date.strftime("%Y-%m-%d"), "total_cases": cases})
-
-
+    else:
+        return False
+    return True
 
 
 baseurls = [
@@ -106,6 +107,7 @@ for date in weekdays:
     # Could not find a page for the date although we tried our best.
     if (page.status_code == 404):
         print("Could not find a page for date "+date.strftime("%Y-%m-%d"))
+        continue
 
     print(page.url)
 
@@ -113,7 +115,9 @@ for date in weekdays:
     doc = lh.fromstring(page.content)
 
     ### 1. attempt: get a HTML table with the data inside
-    parseHTMLTable(doc, date)
+    if not parseHTMLTable(doc, date):
+        print("Could not find and parse a suitable HTML table on \""+page.url+"\".")
+        # TODO: Add other parsing attempts here.
 
 # Create JSON
 with open("data.json", "w") as outfile:
