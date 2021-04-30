@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta
 import calendar
 from dateutil.rrule import DAILY, rrule, MO, TU, WE, TH, FR
+import re
 
 def daterange(start_date, end_date):
   return rrule(DAILY, dtstart=start_date, until=end_date, byweekday=(MO,TU,WE,TH,FR))
@@ -33,13 +34,53 @@ def parseHTMLTable(doc, date):
         return False
     return True
 
+def parsePStrings(doc, date):
+    # Parse data that are stored between <p>..</p> of HTML
+    p_elements = doc.xpath('//p')
+    temp_data = {}
+
+    # Iterate over all <p> elements
+    for p in p_elements:
+        # Search in all <p> contents for location strings
+        for loc in map_names_to_towns.keys():
+            # We have a match, now let's see if this is actually a line of data
+            if (loc in p.text_content()):
+                town = map_names_to_towns[loc]
+
+                # Search via regex in format like this:
+                # Aldenhoven: 28 (Gesamtzahl aller jemals positiv Getesteten je Ort: 566)
+                # Düren: 175 (3222)
+                # Heimbach: 14 (115)
+                match = re.findall("^"+loc+": \d+ \(.*?(\d+)\)", p.text_content())
+                if (len(match) == 1):
+                    temp_data[town] = match[0]
+
+        # Number for "Kreis" are not encoded in a table, but hidden in text:
+        kreis = re.findall("Ausbruch der Pandemie (\d+) Menschen positiv", p.text_content())
+        if (len(kreis) > 0):
+            temp_data["kreis"] = kreis[0]
+
+
+    # Now that we built our temporary data object, we need to verify that it's complete.
+    # If some date is missing, print warning.
+    if not set(temp_data.keys()) == set(data.keys()):
+        print("Found data for "+date.strftime("%Y-%m-%d")
+              +" via <p> strings, but missing for "
+              +( str(set(data.keys())-set(temp_data.keys())) ))
+        return False
+    # Otherwise add the numbers to the data dict.
+    else:
+        for town in temp_data:
+            data[town]["data"].append({"date": date.strftime("%Y-%m-%d"), "total_cases": temp_data[town]})
+        return True
+
 
 baseurls = [
   'https://www.kreis-dueren.de/presse/2021/corona_{year}-{month}-{day}.php',
   'https://www.kreis-dueren.de/presse/2021/Corona_{year}-{month}-{day}.php',
   'https://www.kreis-dueren.de/presse/2021/Corona_{day}{month}.php'
 ]
-start_date = datetime(2021, 4, 20)
+start_date = datetime(2021, 1, 4)
 end_date = datetime.now() - timedelta(1) # = yesterday
 weekdays = daterange(start_date, end_date)
 
@@ -116,8 +157,8 @@ for date in weekdays:
 
     ### 1. attempt: get a HTML table with the data inside
     if not parseHTMLTable(doc, date):
-        print("Could not find and parse a suitable HTML table on \""+page.url+"\".")
-        # TODO: Add other parsing attempts here.
+        if not parsePStrings(doc, date):
+            print("Could not find and parse a suitable HTML table or <p> strings on \""+page.url+"\".")
 
 # Create JSON
 with open("data.json", "w") as outfile:
